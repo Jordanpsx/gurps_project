@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-br" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compêndio de Magias - GURPS</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="layout-container">
+        
+        <aside class="painel-lista">
+            <header>
+                <h2>Magias</h2>
+                <fieldset>
+                    <label><input type="radio" name="theme" value="light" checked /> Light</label>
+                    <label><input type="radio" name="theme" value="dark" /> Dark</label>
+                </fieldset>
+            </header>
+            
+            <div id="seletor-idioma" role="group">
+                <button data-lang="pt" class="contrast">Português</button>
+                <button data-lang="en" class="outline contrast">English</button>
+            </div>
+
+            <div class="grid">
+                <div>
+                    <label for="ordenacao" style="font-weight: bold; margin-bottom: 0;">Ordenar por</label>
+                    <select id="ordenacao">
+                        <option value="nome">Nome (A-Z)</option>
+                        <option value="id">Ordem do Livro</option>
+                        <option value="custo">Custo (Menor > Maior)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <input type="search" id="busca" name="busca" placeholder="Buscar por nome...">
+
+            <div class="grid">
+                <select id="filtro-escola">
+                    <option value="">Todas as Escolas</option>
+                </select>
+                <select id="filtro-tipo">
+                    <option value="">Todos os Tipos</option>
+                </select>
+            </div>
+            
+            <div id="lista-nomes-magias">
+                <p><progress></progress></p>
+            </div>
+        </aside>
+
+        <main class="painel-conteudo">
+            <div id="detalhes-magia">
+                <article>
+                    <h3>Bem-vindo!</h3>
+                    <p>Selecione uma magia na lista à esquerda para ver seus detalhes.</p>
+                </article>
+            </div>
+        </main>
+
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>

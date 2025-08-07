@@ -1,0 +1,75 @@
+/* Layout principal com duas colunas */
+.layout-container {
+    display: grid;
+    grid-template-columns: 380px 1fr; 
+    gap: 2rem;
+    height: 100vh;
+    padding: 1rem;
+    box-sizing: border-box;
+}
+
+/* Estilos para o painel da esquerda */
+.painel-lista {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.painel-lista header {
+    flex-shrink: 0;
+}
+
+#lista-nomes-magias {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding-right: 10px;
+    margin-top: 1rem;
+}
+
+/* Estilos para os itens da lista de magias */
+.item-lista {
+    display: block;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    border: 1px solid var(--contrast-border);
+    border-radius: var(--border-radius);
+    text-decoration: none;
+    color: var(--color);
+    transition: background-color 0.2s ease-in-out;
+}
+
+.item-lista:hover {
+    background-color: var(--secondary-hover);
+}
+
+.item-lista.active {
+    background-color: var(--primary);
+    color: var(--primary-inverse);
+    border-color: var(--primary);
+}
+
+
+/* Estilos para o painel da direita */
+.painel-conteudo {
+    height: 100%;
+    overflow-y: auto;
+}
+
+/* --- NOVOS ESTILOS PARA O STAT BLOCK --- */
+.stat-block-propriedade {
+    margin-bottom: 0.5rem;
+}
+
+.stat-block-hr {
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    border-color: var(--secondary-border);
+}
+
+
+/* Ajustes no botão de idioma ativo */
+#seletor-idioma button.active {
+    background-color: var(--primary);
+    color: var(--primary-inverse);
+    border-color: var(--primary);
+}
