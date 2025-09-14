@@ -186,13 +186,5 @@ def api_magias(lang):
 
 if __name__ == '__main__':
     app.run(debug=True)
-```
 
-### Próximos Passos:
-
-1.  **Crie o arquivo `.env`** na raiz do seu projeto com a sua `DATABASE_URL`.
-2.  **Instale as dependências** no seu ambiente virtual:
-    ```bash
-    pip install Flask Flask-SQLAlchemy psycopg2-binary python-dotenv
-    
 
