@@ -1,0 +1,213 @@
+/* ============================================================================= */
+/* ARQUIVO DE ESTILOS PERSONALIZADOS - GURPS DIGITAL SPELLBOOK                  */
+/* Inspirado na interface densa e funcional do 5e.tools                      */
+/* ============================================================================= */
+
+/* --- Variáveis de Tema (Paleta de Cores) --- */
+:root {
+    --background-color: #1c1c1c;
+    --panel-background-color: #2a2a2a;
+    --panel-header-color: #333333;
+    --border-color: #444444;
+    --text-color: #cccccc;
+    --text-muted-color: #888888;
+    --accent-color: #00aaff;
+    --accent-hover-color: #0088cc;
+    --active-item-bg: #405a69;
+}
+
+/* --- Estilos Globais e Reset --- */
+body {
+    background-color: var(--background-color);
+    color: var(--text-color);
+    margin: 0;
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh; /* Ocupa a altura total da tela */
+}
+
+/* Remove margens padrão de alguns elementos */
+h1, h2, h3, h4, h5, h6, p {
+    margin: 0;
+    padding: 0;
+}
+
+/* --- Cabeçalho Principal --- */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1.5rem;
+    background-color: var(--panel-header-color);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0; /* Impede que o cabeçalho encolha */
+}
+
+.page-header .title {
+    font-size: 1.25rem;
+}
+
+/* --- Layout Principal (Grid de 3 Colunas) --- */
+.main-content-grid {
+    display: grid;
+    /* Colunas: Filtros (fixo), Lista (flexível), Detalhes (flexível) */
+    grid-template-columns: 280px 1fr 2fr; 
+    gap: 1rem;
+    padding: 1rem;
+    flex-grow: 1; /* Faz o grid ocupar o espaço restante */
+    height: 0; /* Truque para o flex-grow funcionar corretamente em altura */
+    overflow: hidden; /* Impede a rolagem no nível do grid */
+}
+
+/* --- Estilo dos Painéis Individuais --- */
+#filters-panel, #list-view-panel, #stat-block-panel {
+    background-color: var(--panel-background-color);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Esconde conteúdo que transborda */
+}
+
+/* --- Painel de Filtros (Esquerda) --- */
+#filters-panel {
+    padding: 1rem;
+    overflow-y: auto; /* Permite rolagem se os filtros forem muitos */
+}
+#filters-panel h4 {
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.5rem;
+}
+#filters-panel label {
+    margin-top: 0.75rem;
+    margin-bottom: 0.25rem;
+    font-size: 0.9rem;
+}
+#reset-filters-btn {
+    margin-top: 1.5rem;
+    width: 100%;
+}
+
+/* --- Painel de Lista (Centro) --- */
+.spell-list-container {
+    flex-grow: 1;
+    overflow-y: auto; /* Permite que APENAS a lista role */
+    padding: 0.5rem;
+}
+#spell-list ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+#spell-list li {
+    margin-bottom: 4px;
+}
+#spell-list button {
+    width: 100%;
+    text-align: left;
+    background-color: transparent;
+    border: 1px solid var(--border-color);
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+#spell-list button:hover {
+    background-color: var(--panel-header-color);
+}
+/* Estilo para a magia selecionada */
+#spell-list button.active {
+    background-color: var(--active-item-bg);
+    border-color: var(--accent-color);
+    font-weight: bold;
+}
+
+/* Paginação */
+#pagination {
+    padding: 0.75rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0; /* Impede que a paginação encolha */
+}
+
+/* --- Painel de Detalhes (Direita) --- */
+#stat-block-panel {
+    overflow-y: auto; /* Permite que APENAS os detalhes rolem */
+}
+#stat-block {
+    padding: 1.5rem;
+}
+#stat-block .placeholder {
+    text-align: center;
+    padding-top: 4rem;
+    color: var(--text-muted-color);
+}
+#stat-block article header {
+    border-bottom: 2px solid var(--accent-color);
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+}
+#stat-block article h2 {
+    margin-bottom: 0.25rem;
+}
+#stat-block article p em {
+    color: var(--text-muted-color);
+}
+#stat-block article h4 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+    color: var(--accent-color);
+    font-weight: bold;
+}
+#stat-block .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.5rem 1rem;
+}
+#stat-block a {
+    color: var(--accent-color);
+    text-decoration: none;
+}
+#stat-block a:hover {
+    text-decoration: underline;
+}
+#stat-block footer {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+    color: var(--text-muted-color);
+}
+
+
+/* --- Utilitários --- */
+#loading-indicator {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    background-color: var(--accent-color);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    z-index: 1000;
+}
+.hidden {
+    display: none !important;
+}
+
+/* --- Responsividade --- */
+@media (max-width: 1024px) {
+    .main-content-grid {
+        /* Desmonta o grid e empilha os painéis */
+        grid-template-columns: 1fr;
+        height: auto; /* Permite que o conteúdo determine a altura */
+        overflow-y: auto; /* Permite rolagem na página inteira */
+    }
+    #list-view-panel, #stat-block-panel {
+        /* Define uma altura mínima para evitar que fiquem muito pequenos */
+        min-height: 400px;
+    }
+}
+

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GURPS Digital Spellbook</title>
+    <!-- Framework CSS Pico (para base de estilos e tema escuro) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <!-- Nossos estilos personalizados -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+    <!-- Cabeçalho da Página -->
+    <header class="page-header">
+        <h1 class="title">GURPS Digital Spellbook</h1>
+        <fieldset class="lang-switch">
+            <label for="lang-toggle">
+                <input type="checkbox" id="lang-toggle" name="lang-toggle" role="switch">
+                PT-BR / EN-US
+            </label>
+        </fieldset>
+    </header>
+
+    <!-- Conteúdo Principal (Grid de 3 Colunas) -->
+    <main class="main-content-grid">
+        
+        <!-- Painel de Filtros (Esquerda) -->
+        <aside id="filters-panel">
+            <h4>Filtros</h4>
+            
+            <label for="search-input">Buscar por Nome</label>
+            <input type="search" id="search-input" name="search" placeholder="Ex: Bola de Fogo...">
+
+            <label for="sort-select">Ordenar por</label>
+            <select id="sort-select">
+                <option value="id" selected>Ordem do Livro</option>
+                <option value="name">Nome</option>
+                <option value="cost">Custo</option>
+                <option value="magery">Magia</option>
+            </select>
+
+            <label for="school-filter">Escola</label>
+            <select id="school-filter">
+                <option value="">Todas</option>
+                <!-- Opções serão preenchidas pelo JavaScript -->
+            </select>
+            
+            <label for="type-filter">Tipo</label>
+            <select id="type-filter">
+                <option value="">Todos</option>
+                <!-- Opções serão preenchidas pelo JavaScript -->
+            </select>
+
+            <button id="reset-filters-btn" class="secondary">Limpar Filtros</button>
+        </aside>
+
+        <!-- Painel de Lista (Centro) -->
+        <section id="list-view-panel">
+            <div class="spell-list-container" id="spell-list">
+                <!-- A lista de magias será renderizada aqui pelo JavaScript -->
+            </div>
+            <nav id="pagination">
+                <!-- A paginação será renderizada aqui -->
+            </nav>
+        </section>
+
+        <!-- Painel de Detalhes (Direita) -->
+        <section id="stat-block-panel">
+            <div id="stat-block">
+                <!-- O bloco de estatísticas da magia selecionada aparecerá aqui -->
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Indicador de Carregamento (fica no canto inferior direito) -->
+    <div id="loading-indicator" class="hidden">Carregando...</div>
+
+    <!-- Nosso script principal, carregado no final para melhor performance -->
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
+
