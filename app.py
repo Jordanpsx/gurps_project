@@ -1,169 +1,333 @@
 import os
-from flask import Flask, jsonify, render_template, request
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import joinedload
 from dotenv import load_dotenv
+# Importações para o banco de dados e autenticação
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from flask_bcrypt import Bcrypt
+# Importações principais do Flask
+from flask import Flask, jsonify, request, render_template, redirect, url_for, flash
+import notion_client
 
 # Carrega as variáveis de ambiente do arquivo .env
-load_dotenv(encoding="utf-8") 
+load_dotenv()
 
-# --- CONFIGURAÇÃO INICIAL ---
+# Inicializa o Flask
 app = Flask(__name__)
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://user:pass@host/db')
-app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# --- Configuração do Banco de Dados e Autenticação ---
+
+# 1. Configurações de Segurança e Banco de Dados
+# Mude isso para qualquer frase aleatória
+app.config['SECRET_KEY'] = 'uma-chave-secreta-muito-dificil-de-adivinhar'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")
+
+# 2. Inicializa as Extensões
 db = SQLAlchemy(app)
+bcrypt = Bcrypt(app)
+login_manager = LoginManager(app)
+# Se um usuário não logado tentar acessar uma página protegida, ele será redirecionado para a rota 'login'
+login_manager.login_view = 'login'
+login_manager.login_message_category = 'info'  # Para estilizar mensagens (opcional)
 
+# --------------------------------------------------------
 
-# --- TABELAS DE JUNÇÃO (Muitos-para-Muitos) ---
-spell_schools_table = db.Table('spell_schools',
-    db.Column('spell_id', db.Integer, db.ForeignKey('spells.id'), primary_key=True),
-    db.Column('school_id', db.Integer, db.ForeignKey('schools.id'), primary_key=True)
-)
+# --- Modelo de Usuário (Nossa tabela no DB) ---
 
-# Nota: A tabela de junção para pré-requisitos lógicos (por ID) não é usada neste modelo,
-# mas pode ser implementada no futuro se você migrar os dados do array de texto.
-
-
-# --- MODELS (MAPEAMENTO DAS TABELAS DE MAGIAS) ---
-
-class School(db.Model):
-    __tablename__ = 'schools'
+# A classe 'User' herda de 'UserMixin' (para o Flask-Login) e 'db.Model' (para o SQLAlchemy)
+class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255), unique=True, nullable=False)
-    parent_school_id = db.Column(db.Integer, db.ForeignKey('schools.id'))
+    email = db.Column(db.String(150), unique=True, nullable=False)
+    # A senha terá 60 caracteres, pois é o tamanho do hash do Bcrypt
+    password = db.Column(db.String(60), nullable=False)
+    # O campo que planejamos para vincular ao Notion!
+    notion_tag = db.Column(db.String(100), unique=True, nullable=False)
 
-class SpellType(db.Model):
-    __tablename__ = 'spell_types'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255), unique=True, nullable=False)
+    def __repr__(self):
+        return f"User('{self.email}', '{self.notion_tag}')"
 
-class Spell(db.Model):
-    __tablename__ = 'spells'
-    id = db.Column(db.Integer, primary_key=True)
-    name_unique = db.Column(db.String(255), unique=True, nullable=False)
-    spell_type_id = db.Column(db.Integer, db.ForeignKey('spell_types.id'), nullable=False)
-    resisted_by = db.Column(db.String(255))
-    is_very_hard = db.Column(db.Boolean, nullable=False, default=False)
-    cost_numeric = db.Column(db.Integer)
-    magery_level = db.Column(db.Integer, nullable=False, default=0)
-    casting_time_text = db.Column(db.Text)
-    duration_text = db.Column(db.Text)
-    reference = db.Column(db.String(100))
-    
-    # <<< LINHA ADICIONADA PARA COMPATIBILIDADE 100% >>>
-    # Mapeia a coluna prerequisites TEXT[] do banco de dados.
-    prerequisites = db.Column(db.ARRAY(db.Text))
+# Esta função é exigida pelo Flask-Login para saber como carregar um usuário a partir do ID da sessão
+@login_manager.user_loader
+def load_user(user_id):
+    # Converte o user_id (que é uma string) para inteiro
+    return User.query.get(int(user_id))
 
-    # Relações
-    spell_type = db.relationship('SpellType', lazy='joined')
-    schools = db.relationship('School', secondary=spell_schools_table, backref='spells', lazy='joined')
-    translations = db.relationship('SpellTranslation', backref='spell', cascade="all, delete-orphan", lazy='joined')
-    
-class SpellTranslation(db.Model):
-    __tablename__ = 'spell_translations'
-    id = db.Column(db.Integer, primary_key=True)
-    spell_id = db.Column(db.Integer, db.ForeignKey('spells.id'), nullable=False)
-    lang_code = db.Column(db.String(5), nullable=False, default='pt-BR')
-    name = db.Column(db.String(255), nullable=False)
-    description = db.Column(db.Text)
-    cost_text = db.Column(db.Text)
-    maintenance_cost_text = db.Column(db.Text)
-    item_description = db.Column(db.Text)
-    prerequisites_text = db.Column(db.Text)
+# --------------------------------------------------------
 
+# --- Inicialização do Cliente Notion (sem mudanças) ---
+NOTION_TOKEN = os.getenv("NOTION_TOKEN")
+DATABASE_ID = os.getenv("DATABASE_ID")
 
-# --- FUNÇÕES AUXILIARES ---
+try:
+    notion = notion_client.Client(auth=NOTION_TOKEN)
+    print("Cliente Notion inicializado com sucesso.")
+except Exception as e:
+    print(f"Erro ao inicializar cliente Notion: {e}")
+    notion = None
+# --------------------------------------------------------
 
-def serialize_spell(spell, lang_code):
-    """Converte um objeto Spell em um dicionário serializável para a API."""
-    translation = next((t for t in spell.translations if t.lang_code == lang_code), None)
-    if not translation:
-        return None
+# --- Rotas Principais (Páginas) ---
 
-    return {
-        'id': spell.id,
-        'name_unique': spell.name_unique,
-        'name': translation.name,
-        'description': translation.description,
-        'cost_text': translation.cost_text,
-        'maintenance_cost_text': translation.maintenance_cost_text,
-        'casting_time': spell.casting_time_text,
-        'duration': spell.duration_text,
-        'schools': [school.name for school in spell.schools],
-        'type': spell.spell_type.name,
-        # Usamos o prerequisites_text para exibição, que já está na tabela de tradução
-        'prerequisites_obj': [], # Deixado vazio, pois a lógica agora é baseada em texto
-        'prerequisites_text': translation.prerequisites_text,
-        'item_description': translation.item_description,
-        'reference': spell.reference,
-    }
-
-# --- ROTAS DA APLICAÇÃO ---
-
-@app.route('/')
+# Rota Principal (Homepage)
+@app.route("/")
 def index():
-    return render_template('index.html')
+    # Agora só mostramos a página de tarefas se o usuário estiver logado
+    if current_user.is_authenticated:
+        return render_template('index.html')
+    else:
+        # Se não, mandamos ele para o login
+        return redirect(url_for('login'))
 
-@app.route('/api/filtros')
-def api_filtros():
-    escolas = [school.name for school in School.query.order_by(School.name).all()]
-    tipos = [spell_type.name for spell_type in SpellType.query.order_by(SpellType.name).all()]
-    return jsonify({'escolas': escolas, 'tipos': tipos})
+# --- Rotas de Autenticação (Login, Registro, Logout) ---
 
-@app.route('/api/magias/<lang>')
-def api_magias(lang):
-    page = request.args.get('page', 1, type=int)
-    per_page = 50
-    sort_key = request.args.get('sort', 'id')
-    lang_code = 'pt-BR' if lang == 'pt' else 'en-US'
-    
-    school_filter = request.args.get('school')
-    type_filter = request.args.get('type')
+@app.route("/login", methods=['GET', 'POST'])
+def login():
+    # Se o usuário já está logado, manda ele para a home
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
 
-    ALLOWED_SORT_FIELDS = {
-        'name': SpellTranslation.name,
-        'cost': Spell.cost_numeric,
-        'magery': Spell.magery_level,
-        'id': Spell.id
-    }
-    order_column = ALLOWED_SORT_FIELDS.get(sort_key, Spell.id)
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
 
-    query = db.session.query(Spell)
+        # Procura o usuário no banco de dados pelo email
+        user = User.query.filter_by(email=email).first()
 
-    if sort_key == 'name':
-        query = query.join(SpellTranslation).filter(SpellTranslation.lang_code == lang_code)
-    
-    if school_filter:
-        query = query.join(Spell.schools).filter(School.name == school_filter)
-    if type_filter:
-        query = query.join(Spell.spell_type).filter(SpellType.name == type_filter)
-    
-    query = query.order_by(order_column)
-    
-    query = query.options(
-        joinedload(Spell.translations),
-        joinedload(Spell.schools),
-        joinedload(Spell.spell_type)
-    )
+        # Se o usuário existir e a senha estiver correta (comparando o hash)
+        if user and bcrypt.check_password_hash(user.password, password):
+            login_user(user)  # "Loga" o usuário na sessão
+            flash('Login realizado com sucesso!', 'success')
+            return redirect(url_for('index'))
+        else:
+            flash('Login falhou. Verifique seu email e senha.', 'danger')
 
-    paginated_results = query.paginate(page=page, per_page=per_page, error_out=False)
-    spells_on_page = paginated_results.items
-    
-    serialized_spells = [s for s in [serialize_spell(spell, lang_code) for spell in spells_on_page] if s is not None]
+    return render_template('login.html', title='Login')
 
-    return jsonify({
-        'spells': serialized_spells,
-        'pagination': {
-            'page': paginated_results.page,
-            'per_page': paginated_results.per_page,
-            'total_pages': paginated_results.pages,
-            'total_items': paginated_results.total,
-            'has_next': paginated_results.has_next,
-            'has_prev': paginated_results.has_prev
+
+@app.route("/register", methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        notion_tag = request.form.get('notion_tag')
+
+        # 1. Verifica se o usuário/tag já existe no NOSSO banco (PostgreSQL)
+        user_exists = User.query.filter_by(email=email).first()
+        tag_exists = User.query.filter_by(notion_tag=notion_tag).first()
+
+        if user_exists:
+            flash('Este email já está cadastrado.', 'danger')
+        elif tag_exists:
+            flash(
+                f'O nome de usuário "{notion_tag}" já está em uso. Escolha outro.', 'danger')
+        else:
+            # --- LÓGICA DE SINCRONIZAÇÃO COM O NOTION ---
+            try:
+                # 2. Busca a estrutura atual da base de dados no Notion
+                db_info = notion.databases.retrieve(database_id=DATABASE_ID)
+
+                # 3. Pega as opções (tags) existentes da propriedade "Responsáveis"
+                responsaveis_prop = db_info.get(
+                    'properties', {}).get('Responsáveis', {})
+                existing_options = responsaveis_prop.get(
+                    'multi_select', {}).get('options', [])
+
+                # 4. Cria uma lista apenas com os nomes das tags existentes
+                existing_names = [opt['name'] for opt in existing_options]
+
+                # 5. Verifica se a nova tag (ex: "Jordan") JÁ EXISTE no Notion
+                if notion_tag not in existing_names:
+                    print(
+                        f"A tag '{notion_tag}' não existe no Notion. Criando...")
+
+                    # 6. Se não existir, adiciona a nova tag à lista
+                    existing_options.append({"name": notion_tag})
+
+                    # 7. Envia a atualização para a API do Notion, alterando as propriedades
+                    notion.databases.update(
+                        database_id=DATABASE_ID,
+                        properties={
+                            "Responsáveis": {  # O nome exato da sua coluna
+                                "multi_select": {
+                                    # Envia a lista completa (antigas + nova)
+                                    "options": existing_options
+                                }
+                            }
+                        }
+                    )
+                    print(
+                        f"Tag '{notion_tag}' criada com sucesso no Notion.")
+                else:
+                    print(
+                        f"A tag '{notion_tag}' já existe no Notion. Nenhuma ação necessária.")
+
+            except notion_client.errors.APIResponseError as e:
+                print(
+                    f"Erro na API do Notion ao tentar criar a tag: {e}")
+                flash(
+                    f'Erro ao sincronizar com o Notion. Tente novamente.', 'danger')
+                # Se der erro no Notion, não continuamos o cadastro
+                return render_template('register.html', title='Registrar')
+            except Exception as e:
+                print(f"Erro inesperado durante a sincronização: {e}")
+                flash('Um erro inesperado ocorreu. Tente novamente.', 'danger')
+                return render_template('register.html', title='Registrar')
+            # --- FIM DA LÓGICA DE SINCRONIZAÇÃO ---
+
+            # 8. Se tudo deu certo (local e Notion), cria o usuário no NOSSO banco
+            hashed_password = bcrypt.generate_password_hash(
+                password).decode('utf-8')
+            user = User(email=email, password=hashed_password,
+                        notion_tag=notion_tag)
+
+            db.session.add(user)
+            db.session.commit()
+
+            flash(
+                'Sua conta foi criada! A tag foi sincronizada com o Notion. Você já pode fazer o login.', 'success')
+            return redirect(url_for('login'))
+
+    return render_template('register.html', title='Registrar')
+
+
+@app.route("/logout")
+def logout():
+    logout_user()  # "Desloga" o usuário da sessão
+    return redirect(url_for('login'))
+
+# --------------------------------------------------------
+
+# --- Nossas Rotas de API (Agora protegidas!) ---
+
+@app.route("/api/tarefas")
+@login_required  # Só permite acesso se o usuário estiver logado
+def get_tarefas():
+    if not notion:
+        return jsonify({"erro": "Cliente Notion não inicializado"}), 500
+
+    # Lógica de Filtragem
+    # Filtra tarefas baseadas no 'notion_tag' do usuário logado
+    user_tag = current_user.notion_tag
+
+    try:
+        # Adicionamos um 'filter' ao nosso query do Notion!
+        response = notion.databases.query(
+            database_id=DATABASE_ID,
+            filter={
+                "property": "Responsáveis",  # O nome da sua coluna Multi-select
+                "multi_select": {
+                    # Filtra se o multi-select CONTÉM a tag do usuário
+                    "contains": user_tag
+                }
+            }
+        )
+        tarefas = response.get("results", [])
+        return jsonify({
+            "total_tarefas": len(tarefas),
+            "tarefas": tarefas
+        })
+    except notion_client.errors.APIResponseError as e:
+        print(f"Erro na API do Notion: {e}")
+        return jsonify({"erro": str(e)}), 500
+    except Exception as e:
+        print(f"Erro inesperado: {e}")
+        return jsonify({"erro": "Um erro inesperado ocorreu"}), 500
+
+
+@app.route("/api/tarefa/atualizar_status", methods=['POST'])
+@login_required  # Protegendo a rota de update também
+def atualizar_status():
+    if not notion:
+        return jsonify({"erro": "Cliente Notion não inicializado"}), 500
+    try:
+        data = request.get_json()
+        page_id = data.get('page_id')
+        new_status = data.get('new_status')
+
+        if not page_id or not new_status:
+            return jsonify({"erro": "page_id e new_status são obrigatórios"}), 400
+
+        notion.pages.update(
+            page_id=page_id,
+            properties={
+                "Status": {
+                    "select": {
+                        "name": new_status
+                    }
+                }
+            }
+        )
+        return jsonify({"sucesso": True, "mensagem": f"Tarefa {page_id} atualizada para {new_status}"})
+    except notion_client.errors.APIResponseError as e:
+        print(f"Erro na API do Notion: {e}")
+        return jsonify({"erro": str(e)}), 500
+    except Exception as e:
+        print(f"Erro inesperado: {e}")
+        return jsonify({"erro": str(e)}), 500
+
+# --- NOVO: Rota de API para CRIAR uma nova tarefa ---
+@app.route("/api/tarefa/criar", methods=['POST'])
+@login_required
+def criar_tarefa():
+    if not notion:
+        return jsonify({"erro": "Cliente Notion não inicializado"}), 500
+
+    try:
+        # Pega o nome da tarefa enviado pelo JavaScript
+        data = request.get_json()
+        nome_tarefa = data.get('nome_tarefa')
+
+        if not nome_tarefa:
+            return jsonify({"erro": "O nome da tarefa é obrigatório"}), 400
+
+        # Pega a tag do usuário que está logado
+        user_tag = current_user.notion_tag
+
+        # Define as propriedades da nova página (tarefa) no Notion
+        novas_propriedades = {
+            "Nome da Tarefa": {  # Propriedade 'Title'
+                "title": [
+                    {"text": {"content": nome_tarefa}}
+                ]
+            },
+            "Status": {  # Propriedade 'Select'
+                "select": {
+                    "name": "A Fazer"  # Define o status inicial como "A Fazer"
+                }
+            },
+            "Responsáveis": {  # Propriedade 'Multi-select'
+                "multi_select": [
+                    {"name": user_tag}  # Atribui a tarefa ao usuário logado
+                ]
+            }
         }
-    })
+        
+        # Chama a API do Notion para CRIAR a página
+        notion.pages.create(
+            parent={"database_id": DATABASE_ID},
+            properties=novas_propriedades
+        )
+        
+        return jsonify({"sucesso": True, "mensagem": "Tarefa criada com sucesso"})
 
-if __name__ == '__main__':
+    except notion_client.errors.APIResponseError as e:
+        print(f"Erro na API do Notion ao criar tarefa: {e}")
+        return jsonify({"erro": str(e)}), 500
+    except Exception as e:
+        print(f"Erro inesperado ao criar tarefa: {e}")
+        return jsonify({"erro": str(e)}), 500
+
+# --------------------------------------------------------
+
+# Roda o servidor se o script for executado diretamente
+# Este bloco DEVE ser a ÚLTIMA COISA no arquivo.
+if __name__ == "__main__":
+    # Contexto da aplicação para criar o banco de dados
+    with app.app_context():
+        # Cria todas as tabelas (ex: a tabela User) que definimos, se elas não existirem
+        db.create_all()
+        print("Tabelas do banco de dados verificadas/criadas.")
+
     app.run(debug=True)
-
